@@ -28,7 +28,7 @@ const Signup = () => {
 
         // Mock Authentication
         localStorage.setItem("isAuthenticated", "true");
-        navigate("/dashboard");
+        navigate("/onboarding");
     };
 
     return (

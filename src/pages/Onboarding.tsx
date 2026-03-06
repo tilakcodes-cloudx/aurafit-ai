@@ -1,32 +1,102 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoveRight, Activity, Target, User, Ruler, Weight } from "lucide-react";
+import { MoveRight, Activity, Target, User, Ruler, Weight, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Onboarding = () => {
     const navigate = useNavigate();
-    const [step, setStep] = useState(1);
-    const [formData, setFormData] = useState({
-        age: "",
-        gender: "Male" as "Male" | "Female",
-        height: "",
-        weight: "",
-        goal: "Maintain" as "Lose Fat" | "Maintain" | "Gain Muscle",
-        activityLevel: "Moderate" as "Sedentary" | "Moderate" | "Active",
+
+    // Initialize state from local storage or use defaults
+    const [step, setStep] = useState(() => {
+        const savedStep = localStorage.getItem("onboardingStep");
+        return savedStep ? Number(savedStep) : 1;
     });
 
+    const [formData, setFormData] = useState(() => {
+        const savedData = localStorage.getItem("onboardingData");
+        if (savedData) {
+            return JSON.parse(savedData);
+        }
+        return {
+            age: "",
+            gender: "" as "" | "Male" | "Female",
+            height: "",
+            weight: "",
+            goal: "" as "" | "Lose Fat" | "Maintain" | "Gain Muscle",
+            activityLevel: "" as "" | "Sedentary" | "Moderate" | "Active",
+        };
+    });
+
+    const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+
+    // Save to local storage whenever data or step changes
+    useEffect(() => {
+        localStorage.setItem("onboardingData", JSON.stringify(formData));
+        localStorage.setItem("onboardingStep", step.toString());
+    }, [formData, step]);
+
+    const validateStep = (currentStep: number) => {
+        const newErrors: Record<string, string | undefined> = {};
+        let isValid = true;
+
+        if (currentStep === 1) {
+            if (!formData.gender) {
+                newErrors.gender = "Please select a gender";
+                isValid = false;
+            }
+            if (!formData.age) {
+                newErrors.age = "Age is required";
+                isValid = false;
+            } else if (Number(formData.age) <= 0) {
+                newErrors.age = "Age must be greater than 0";
+                isValid = false;
+            }
+        } else if (currentStep === 2) {
+            if (!formData.height) {
+                newErrors.height = "Height is required";
+                isValid = false;
+            } else if (Number(formData.height) <= 0) {
+                newErrors.height = "Height must be greater than 0";
+                isValid = false;
+            }
+            if (!formData.weight) {
+                newErrors.weight = "Weight is required";
+                isValid = false;
+            } else if (Number(formData.weight) <= 0) {
+                newErrors.weight = "Weight must be greater than 0";
+                isValid = false;
+            }
+        } else if (currentStep === 3) {
+            if (!formData.goal) {
+                newErrors.goal = "Please select a goal";
+                isValid = false;
+            }
+            if (!formData.activityLevel) {
+                newErrors.activityLevel = "Please select an activity level";
+                isValid = false;
+            }
+        }
+
+        setErrors(newErrors);
+        return isValid;
+    };
+
     const handleNext = () => {
-        if (step < 3) setStep(step + 1);
+        if (validateStep(step)) {
+            setErrors({});
+            if (step < 3) setStep(step + 1);
+        }
     };
 
     const handleBack = () => {
+        setErrors({});
         if (step > 1) setStep(step - 1);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = () => {
+        if (!validateStep(3)) return;
 
         // Save to local storage
         const profile = {
@@ -39,8 +109,26 @@ const Onboarding = () => {
         };
 
         localStorage.setItem("userProfile", JSON.stringify(profile));
+
+        // Clear onboarding partial data
+        localStorage.removeItem("onboardingData");
+        localStorage.removeItem("onboardingStep");
+
         navigate("/dashboard");
     };
+
+    const onFormSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (step < 3) {
+            handleNext();
+        } else {
+            handleSubmit();
+        }
+    };
+
+    const isStep1Valid = formData.gender && formData.age && Number(formData.age) > 0;
+    const isStep2Valid = formData.height && Number(formData.height) > 0 && formData.weight && Number(formData.weight) > 0;
+    const isStep3Valid = formData.goal && formData.activityLevel;
 
     const renderStep = () => {
         switch (step) {
@@ -51,6 +139,7 @@ const Onboarding = () => {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
                         className="space-y-6"
                     >
                         <div className="space-y-4">
@@ -61,16 +150,24 @@ const Onboarding = () => {
                                         <button
                                             key={g}
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, gender: g })}
+                                            onClick={() => {
+                                                setFormData({ ...formData, gender: g });
+                                                if (errors.gender) setErrors({ ...errors, gender: undefined });
+                                            }}
                                             className={`p-3 rounded-xl border text-sm font-medium transition-all duration-300 ${formData.gender === g
-                                                    ? "bg-brand-primary/20 border-brand-primary text-brand-primary"
-                                                    : "bg-background/50 border-white/10 text-muted-foreground hover:border-white/20"
+                                                ? "bg-brand-primary/20 border-brand-primary text-brand-primary"
+                                                : "bg-background/50 border-white/10 text-muted-foreground hover:border-white/20"
                                                 }`}
                                         >
                                             {g}
                                         </button>
                                     ))}
                                 </div>
+                                {errors.gender && (
+                                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1 transition-all">
+                                        <AlertCircle className="w-3 h-3" /> {errors.gender}
+                                    </p>
+                                )}
                             </div>
                             <div className="relative pt-2">
                                 <label className="text-sm font-medium text-foreground mb-3 block">Age</label>
@@ -79,23 +176,29 @@ const Onboarding = () => {
                                     <Input
                                         type="number"
                                         placeholder="e.g. 25"
-                                        required
-                                        min="16"
+                                        min="1"
                                         max="120"
-                                        className="pl-10 bg-background/50 border-white/10 text-foreground h-12"
+                                        className={`pl-10 bg-background/50 border-white/10 text-foreground h-12 transition-all ${errors.age ? 'border-red-500/50 focus-visible:ring-red-500' : ''}`}
                                         value={formData.age}
-                                        onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, age: e.target.value });
+                                            if (errors.age) setErrors({ ...errors, age: undefined });
+                                        }}
                                     />
                                 </div>
+                                {errors.age && (
+                                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1 transition-all">
+                                        <AlertCircle className="w-3 h-3" /> {errors.age}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <Button
-                            type="button"
-                            onClick={handleNext}
-                            disabled={!formData.age || !formData.gender}
-                            className="w-full bg-brand-primary hover:bg-brand-primary/90 text-primary-foreground font-semibold h-12 rounded-xl mt-4"
+                            type="submit"
+                            disabled={!isStep1Valid}
+                            className="w-full bg-brand-primary hover:bg-brand-primary/90 text-primary-foreground font-semibold h-12 rounded-xl mt-4 transition-all duration-300 disabled:opacity-50"
                         >
-                            Continue <MoveRight className="ml-2 h-4 w-4" />
+                            Next <MoveRight className="ml-2 h-4 w-4" />
                         </Button>
                     </motion.div>
                 );
@@ -106,6 +209,7 @@ const Onboarding = () => {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
                         className="space-y-6"
                     >
                         <div className="space-y-5">
@@ -116,14 +220,21 @@ const Onboarding = () => {
                                     <Input
                                         type="number"
                                         placeholder="e.g. 175"
-                                        required
-                                        min="100"
+                                        min="1"
                                         max="300"
-                                        className="pl-10 bg-background/50 border-white/10 text-foreground h-12"
+                                        className={`pl-10 bg-background/50 border-white/10 text-foreground h-12 transition-all ${errors.height ? 'border-red-500/50 focus-visible:ring-red-500' : ''}`}
                                         value={formData.height}
-                                        onChange={(e) => setFormData({ ...formData, height: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, height: e.target.value });
+                                            if (errors.height) setErrors({ ...errors, height: undefined });
+                                        }}
                                     />
                                 </div>
+                                {errors.height && (
+                                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1 transition-all">
+                                        <AlertCircle className="w-3 h-3" /> {errors.height}
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="text-sm font-medium text-foreground mb-2 block">Weight (kg)</label>
@@ -132,14 +243,21 @@ const Onboarding = () => {
                                     <Input
                                         type="number"
                                         placeholder="e.g. 70"
-                                        required
-                                        min="30"
+                                        min="1"
                                         max="300"
-                                        className="pl-10 bg-background/50 border-white/10 text-foreground h-12"
+                                        className={`pl-10 bg-background/50 border-white/10 text-foreground h-12 transition-all ${errors.weight ? 'border-red-500/50 focus-visible:ring-red-500' : ''}`}
                                         value={formData.weight}
-                                        onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, weight: e.target.value });
+                                            if (errors.weight) setErrors({ ...errors, weight: undefined });
+                                        }}
                                     />
                                 </div>
+                                {errors.weight && (
+                                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1 transition-all">
+                                        <AlertCircle className="w-3 h-3" /> {errors.weight}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div className="flex gap-3 mt-4">
@@ -147,17 +265,16 @@ const Onboarding = () => {
                                 type="button"
                                 onClick={handleBack}
                                 variant="outline"
-                                className="w-1/3 border-white/10 text-foreground hover:bg-white/5 h-12 rounded-xl"
+                                className="w-1/3 border-white/10 text-foreground hover:bg-white/5 h-12 rounded-xl transition-all duration-300"
                             >
                                 Back
                             </Button>
                             <Button
-                                type="button"
-                                onClick={handleNext}
-                                disabled={!formData.height || !formData.weight}
-                                className="w-2/3 bg-brand-primary hover:bg-brand-primary/90 text-primary-foreground font-semibold h-12 rounded-xl"
+                                type="submit"
+                                disabled={!isStep2Valid}
+                                className="w-2/3 bg-brand-primary hover:bg-brand-primary/90 text-primary-foreground font-semibold h-12 rounded-xl transition-all duration-300 disabled:opacity-50"
                             >
-                                Continue <MoveRight className="ml-2 h-4 w-4" />
+                                Next <MoveRight className="ml-2 h-4 w-4" />
                             </Button>
                         </div>
                     </motion.div>
@@ -169,6 +286,7 @@ const Onboarding = () => {
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
                         className="space-y-6"
                     >
                         <div className="space-y-6">
@@ -181,16 +299,24 @@ const Onboarding = () => {
                                         <button
                                             key={g}
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, goal: g })}
+                                            onClick={() => {
+                                                setFormData({ ...formData, goal: g });
+                                                if (errors.goal) setErrors({ ...errors, goal: undefined });
+                                            }}
                                             className={`p-3.5 rounded-xl border text-sm font-medium text-left transition-all duration-300 ${formData.goal === g
-                                                    ? "bg-brand-primary/20 border-brand-primary text-brand-primary"
-                                                    : "bg-background/50 border-white/10 text-muted-foreground hover:border-white/20"
+                                                ? "bg-brand-primary/20 border-brand-primary text-brand-primary"
+                                                : "bg-background/50 border-white/10 text-muted-foreground hover:border-white/20"
                                                 }`}
                                         >
                                             {g}
                                         </button>
                                     ))}
                                 </div>
+                                {errors.goal && (
+                                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1 transition-all">
+                                        <AlertCircle className="w-3 h-3" /> {errors.goal}
+                                    </p>
+                                )}
                             </div>
                             <div>
                                 <label className="text-sm font-medium text-foreground mb-3 block flex items-center gap-2">
@@ -205,10 +331,13 @@ const Onboarding = () => {
                                         <button
                                             key={a.level}
                                             type="button"
-                                            onClick={() => setFormData({ ...formData, activityLevel: a.level as "Sedentary" | "Moderate" | "Active" })}
+                                            onClick={() => {
+                                                setFormData({ ...formData, activityLevel: a.level as "Sedentary" | "Moderate" | "Active" });
+                                                if (errors.activityLevel) setErrors({ ...errors, activityLevel: undefined });
+                                            }}
                                             className={`p-3.5 rounded-xl border text-sm text-left transition-all duration-300 flex flex-col gap-1 ${formData.activityLevel === a.level
-                                                    ? "bg-brand-secondary/20 border-brand-secondary text-brand-secondary"
-                                                    : "bg-background/50 border-white/10 text-muted-foreground hover:border-white/20"
+                                                ? "bg-brand-secondary/20 border-brand-secondary text-brand-secondary"
+                                                : "bg-background/50 border-white/10 text-muted-foreground hover:border-white/20"
                                                 }`}
                                         >
                                             <span className="font-medium text-foreground">{a.level}</span>
@@ -216,6 +345,11 @@ const Onboarding = () => {
                                         </button>
                                     ))}
                                 </div>
+                                {errors.activityLevel && (
+                                    <p className="text-red-500 text-xs mt-2 flex items-center gap-1 transition-all">
+                                        <AlertCircle className="w-3 h-3" /> {errors.activityLevel}
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <div className="flex gap-3 mt-4">
@@ -223,14 +357,14 @@ const Onboarding = () => {
                                 type="button"
                                 onClick={handleBack}
                                 variant="outline"
-                                className="w-1/3 border-white/10 text-foreground hover:bg-white/5 h-12 rounded-xl"
+                                className="w-1/3 border-white/10 text-foreground hover:bg-white/5 h-12 rounded-xl transition-all duration-300"
                             >
                                 Back
                             </Button>
                             <Button
-                                type="button"
-                                onClick={handleSubmit}
-                                className="w-2/3 bg-gradient-to-r from-brand-primary to-brand-secondary hover:opacity-90 text-primary-foreground font-semibold h-12 rounded-xl border-0"
+                                type="submit"
+                                disabled={!isStep3Valid}
+                                className="w-2/3 bg-gradient-to-r from-brand-primary to-brand-secondary hover:opacity-90 text-primary-foreground font-semibold h-12 rounded-xl border-0 transition-all duration-300 disabled:opacity-50"
                             >
                                 Complete Setup <MoveRight className="ml-2 h-4 w-4" />
                             </Button>
@@ -267,9 +401,11 @@ const Onboarding = () => {
                 </div>
 
                 <div className="glass-panel p-6 sm:p-8 rounded-2xl border border-white/5 relative overflow-hidden backdrop-blur-xl bg-background/40">
-                    <AnimatePresence mode="wait">
-                        {renderStep()}
-                    </AnimatePresence>
+                    <form onSubmit={onFormSubmit}>
+                        <AnimatePresence mode="wait">
+                            {renderStep()}
+                        </AnimatePresence>
+                    </form>
                 </div>
             </div>
         </div>
